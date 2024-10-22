@@ -24,7 +24,17 @@
 
 #include "glut.h"
 
+#define XSIDE    10            // length of the x side of the grid
+#define X0      (-XSIDE/2.)        // where one side starts
+#define NX    1000            // how many points in x
+#define DX    ( XSIDE/(float)NX )    // change in x between the points
 
+#define YGRID    0.f            // y-height of the grid
+
+#define ZSIDE    5            // length of the z side of the grid
+#define Z0      (-ZSIDE/2.)        // where one side starts
+#define NZ    1000           // how many points in z
+#define DZ    ( ZSIDE/(float)NZ )    // change in z between the points
 
 //	This is a sample OpenGL / GLUT program
 //
@@ -181,7 +191,6 @@ const int MS_PER_CYCLE = 10000;		// 10000 milliseconds = 10 seconds
 int		ActiveButton;			// current button that is down
 GLuint	AxesList;				// list to hold the axes
 int		AxesOn;					// != 0 means to draw the axes
-GLuint	BoxList;				// object display list
 int		DebugOn;				// != 0 means to print debugging info
 int		DepthCueOn;				// != 0 means to use intensity depth cueing
 int		DepthBufferOn;			// != 0 means to use the z-buffer
@@ -195,6 +204,17 @@ float	Time;					// used for animation, this has a value between 0. and 1.
 int		Xmouse, Ymouse;			// mouse values
 float	Xrot, Yrot;				// rotation angles in degrees
 
+GLuint DinoDL;
+GLuint Sphere;
+GLuint Torus;
+
+GLuint GridDL;
+
+GLuint  Light;
+bool    PointLight;
+float   LRed;
+float   LGreen;
+float   LBlue;
 
 // function prototypes:
 
@@ -273,13 +293,13 @@ MulArray3(float factor, float a, float b, float c )
 
 // these are here for when you need them -- just uncomment the ones you need:
 
-//#include "setmaterial.cpp"
-//#include "setlight.cpp"
-//#include "osusphere.cpp"
+#include "setmaterial.cpp"
+#include "setlight.cpp"
+#include "osusphere.cpp"
 //#include "osucone.cpp"
-//#include "osutorus.cpp"
+#include "osutorus.cpp"
 //#include "bmptotexture.cpp"
-//#include "loadobjfile.cpp"
+#include "loadobjfile.cpp"
 //#include "keytime.cpp"
 //#include "glslprogram.cpp"
 
@@ -432,23 +452,57 @@ Display( )
 	{
 		glDisable( GL_FOG );
 	}
+    
+    glEnable(GL_LIGHTING);
+    
+    float LPosX = sin(Time * 2 * F_2_PI);
+    float LPosY = 2;
+    float LPosZ = cos(Time * 2 * F_2_PI);
+    
+    if (PointLight)
+        SetPointLight(GL_LIGHT0, LPosX, LPosY, LPosZ, LRed, LGreen, LBlue);
+    else
+        SetSpotLight(GL_LIGHT0, LPosX, LPosY, LPosZ, 0, -1, 0, LRed, LGreen, LBlue);
+    
+    glEnable(GL_LIGHT0);
+    glDisable(GL_LIGHTING);
+    
+    glColor3f(LRed, LGreen, LBlue);
+    glTranslatef(LPosX, LPosY, LPosZ);
+    glCallList(Light);
+    glTranslatef(-LPosX, -LPosY, -LPosZ);
 
 	// possibly draw the axes:
 
 	if( AxesOn != 0 )
 	{
-		glColor3fv( &Colors[NowColor][0] );
+		glColor3f(1, 1, 0 );
 		glCallList( AxesList );
+        glEnable(GL_LIGHTING);
 	}
 
 	// since we are using glScalef( ), be sure the normals get unitized:
 
 	glEnable( GL_NORMALIZE );
-
+    glShadeModel(GL_SMOOTH);
 
 	// draw the box object by calling up its display list:
-
-	glCallList( BoxList );
+	glCallList( GridDL );
+    
+    SetMaterial(1, 0, 0, 0);
+    glTranslatef(-2, .75, 0);
+    glScalef(0.25, 0.25, 0.25);
+    glCallList( DinoDL );
+    
+    SetMaterial(0, 1, 0, 0);
+    glScalef(4, 4, 4);
+    glTranslatef(3, 0, -1.5);
+    glCallList( Sphere );
+    
+    SetMaterial(0, 0, 1, 1);
+    glTranslatef(.25, -.5, 3);
+    glScalef(.5, .5, .5);
+    glCallList( Torus );
 
 #ifdef DEMO_Z_FIGHTING
 	if( DepthFightingOn != 0 )
@@ -821,64 +875,43 @@ InitLists( )
 	if (DebugOn != 0)
 		fprintf(stderr, "Starting InitLists.\n");
 
-	float dx = BOXSIZE / 2.f;
-	float dy = BOXSIZE / 2.f;
-	float dz = BOXSIZE / 2.f;
 	glutSetWindow( MainWindow );
 
 	// create the object:
-
-	BoxList = glGenLists( 1 );
-	glNewList( BoxList, GL_COMPILE );
-
-		glBegin( GL_QUADS );
-
-			glColor3f( 1., 0., 0. );
-
-				glNormal3f( 1., 0., 0. );
-					glVertex3f(  dx, -dy,  dz );
-					glVertex3f(  dx, -dy, -dz );
-					glVertex3f(  dx,  dy, -dz );
-					glVertex3f(  dx,  dy,  dz );
-
-				glNormal3f(-1., 0., 0.);
-					glVertex3f( -dx, -dy,  dz);
-					glVertex3f( -dx,  dy,  dz );
-					glVertex3f( -dx,  dy, -dz );
-					glVertex3f( -dx, -dy, -dz );
-
-			glColor3f( 0., 1., 0. );
-
-				glNormal3f(0., 1., 0.);
-					glVertex3f( -dx,  dy,  dz );
-					glVertex3f(  dx,  dy,  dz );
-					glVertex3f(  dx,  dy, -dz );
-					glVertex3f( -dx,  dy, -dz );
-
-				glNormal3f(0., -1., 0.);
-					glVertex3f( -dx, -dy,  dz);
-					glVertex3f( -dx, -dy, -dz );
-					glVertex3f(  dx, -dy, -dz );
-					glVertex3f(  dx, -dy,  dz );
-
-			glColor3f(0., 0., 1.);
-
-				glNormal3f(0., 0., 1.);
-					glVertex3f(-dx, -dy, dz);
-					glVertex3f( dx, -dy, dz);
-					glVertex3f( dx,  dy, dz);
-					glVertex3f(-dx,  dy, dz);
-
-				glNormal3f(0., 0., -1.);
-					glVertex3f(-dx, -dy, -dz);
-					glVertex3f(-dx,  dy, -dz);
-					glVertex3f( dx,  dy, -dz);
-					glVertex3f( dx, -dy, -dz);
-
-		glEnd( );
-
-	glEndList( );
-
+    
+    DinoDL = glGenLists( 1 );
+        glNewList( DinoDL, GL_COMPILE );
+        LoadObjFile( (char *)"dino.obj" );
+    glEndList( );
+    
+    Sphere = glGenLists( 1 );
+    glNewList( Sphere, GL_COMPILE );
+        OsuSphere( 1., 1000, 1000 );
+    glEndList( );
+    
+    Torus = glGenLists( 1 );
+    glNewList( Torus, GL_COMPILE );
+        OsuTorus( .5, 1., 1000, 1000 );
+    glEndList( );
+    
+    GridDL = glGenLists( 1 );
+    glNewList( GridDL, GL_COMPILE );
+        SetMaterial( 0.6f, 0.6f, 0.6f, 30.f );
+        glNormal3f( 0., 1., 0. );
+        for( int i = 0; i < NZ; i++ ) {
+            glBegin( GL_QUAD_STRIP );
+                for( int j = 0; j < NX; j++ ) {
+                    glVertex3f( X0 + DX*(float)j, YGRID, Z0 + DZ*(float)(i+0) );
+                    glVertex3f( X0 + DX*(float)j, YGRID, Z0 + DZ*(float)(i+1) );
+                }
+            glEnd( );
+        }
+    glEndList( );
+    
+    Light = glGenLists(1);
+        glNewList(Light, GL_COMPILE);
+        OsuSphere(0.1, 100, 100);
+    glEndList();
 
 	// create the axes:
 
@@ -901,15 +934,57 @@ Keyboard( unsigned char c, int x, int y )
 
 	switch( c )
 	{
-		case 'o':
-		case 'O':
-			NowProjection = ORTHO;
+		case 'w':
+		case 'W':
+            LRed = 1;
+            LGreen = 1;
+            LBlue = 1;
 			break;
-
-		case 'p':
-		case 'P':
-			NowProjection = PERSP;
-			break;
+            
+        case 'r':
+        case 'R':
+            LRed = 1;
+            LGreen = 0;
+            LBlue = 0;
+            break;
+            
+        case 'g':
+        case 'G':
+            LRed = 0;
+            LGreen = 1;
+            LBlue = 0;
+            break;
+            
+        case 'b':
+        case 'B':
+            LRed = 0;
+            LGreen = 0;
+            LBlue = 1;
+            break;
+            
+        case 'c':
+        case 'C':
+            LRed = 0;
+            LGreen = 1;
+            LBlue = 1;
+            break;
+            
+        case 'm':
+        case 'M':
+            LRed = 1;
+            LGreen = 0;
+            LBlue = 1;
+            break;
+            
+        case 'p':
+        case 'P':
+            PointLight = true;
+            break;
+            
+        case 's':
+        case 'S':
+            PointLight = false;
+            break;
 
 		case 'q':
 		case 'Q':
@@ -1040,6 +1115,10 @@ Reset( )
 	NowColor = YELLOW;
 	NowProjection = PERSP;
 	Xrot = Yrot = 0.;
+    PointLight = false;
+    LRed = 1;
+    LGreen = 1;
+    LBlue = 1;
 }
 
 
